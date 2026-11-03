@@ -40,7 +40,7 @@ internal static class Program
     {
         _ = ReadFilesAtOuterRing(arguments);
         uint fillSectors = arguments.GetUInt("fill-sectors", DvdEccBlockEncoder.SectorCount);
-        if (arguments.Has("data-dir")
+        if (arguments.Has("data-dir") || arguments.Has("efi-boot-image")
             || fillSectors != DvdEccBlockEncoder.SectorCount
             || ReadBoolean(arguments, "fast-output", fallback: false))
         {
@@ -413,7 +413,7 @@ internal static class Program
 
     private static int SolveMultipleBlocks(CliArguments arguments, uint fillSectors)
     {
-        bool hybridMode = arguments.Has("data-dir");
+        bool hybridMode = arguments.Has("data-dir") || arguments.Has("efi-boot-image");
         bool filesAtOuterRing = ReadFilesAtOuterRing(arguments);
         if (!arguments.Has("image") || arguments.Has("target"))
         {
@@ -439,7 +439,7 @@ internal static class Program
         if (hybridMode && (arguments.Has("lba") || arguments.Has("fill-sectors")))
         {
             throw new ArgumentException(
-                "Hybrid --data-dir mode calculates --lba and --fill-sectors automatically; "
+                "Hybrid filesystem mode calculates --lba and --fill-sectors automatically; "
                 + "use --drawing-start-lba only when extra inner-ring space is required.");
         }
 
@@ -490,10 +490,11 @@ internal static class Program
             }
 
             HybridIsoImageWriter.LayoutPlan isoLayout = HybridIsoImageWriter.Plan(
-                arguments.Require("data-dir"),
+                arguments.Has("data-dir") ? arguments.Require("data-dir") : null,
                 imageMapping.TotalSectors,
                 arguments.Get("volume-label", "DVD_IMAGE"),
-                filesAtOuterRing);
+                filesAtOuterRing,
+                arguments.Has("efi-boot-image") ? arguments.Require("efi-boot-image") : null);
             uint minimumDrawingLba = AlignToEccBlock(filesAtOuterRing
                 ? isoLayout.MetadataEndLbaExclusive : isoLayout.DataEndLbaExclusive, psnOffset);
             lba = arguments.Has("drawing-start-lba")
@@ -761,8 +762,8 @@ internal static class Program
             "outer" => true,
             _ => throw new ArgumentException("--file-position must be 'inner' or 'outer'."),
         };
-        if (outer && !arguments.Has("data-dir"))
-            throw new ArgumentException("--file-position outer requires --data-dir.");
+        if (outer && !arguments.Has("data-dir") && !arguments.Has("efi-boot-image"))
+            throw new ArgumentException("--file-position outer requires --data-dir or --efi-boot-image.");
         return outer;
     }
 
@@ -1457,8 +1458,9 @@ internal static class Program
               --constraint-output FILE  Save the mapped 619008-symbol target
               --constraint-step N       Constrain every Nth channel bit (single block default 1)
               --fill-sectors N          Fill N consecutive sectors; N must be a multiple of 16
+              --efi-boot-image FILE     FAT EFI System Partition image; enables UEFI El Torito boot
               --data-dir DIR            Hybrid disc: store this directory together with the drawing
-              --file-position MODE      inner (default) or outer; outer requires --data-dir
+              --file-position MODE      inner (default) or outer; needs data directory or EFI image
               --drawing-start-lba N     Hybrid override; must follow all files and align to an ECC Block
               --fast-output true|false Direct dispersion ISO output without ECC/EFM replay
                                         (default false; true in hybrid mode)

@@ -9,6 +9,7 @@ public static class Iso9660ImageWriter
 {
     public const int LogicalSectorBytes = 2048;
     private const uint PrimaryVolumeDescriptorLba = 16;
+    private const uint BootRecordVolumeDescriptorLba = 17;
     private const uint SupplementaryVolumeDescriptorLba = 17;
     private const uint TerminatorLba = 18;
     private const uint FirstMetadataLba = 19;
@@ -18,6 +19,7 @@ public static class Iso9660ImageWriter
     public sealed class LayoutPlan
     {
         internal readonly IsoNode _root;
+        internal readonly IsoNode? _efiBootImage;
         internal readonly List<IsoNode> _directories;
         internal readonly Layout _layout;
         internal readonly string _primaryVolumeLabel;
@@ -32,8 +34,10 @@ public static class Iso9660ImageWriter
             Layout layout,
             string primaryVolumeLabel,
             string jolietVolumeLabel,
-            DateTimeOffset timestamp)
+            DateTimeOffset timestamp,
+            IsoNode? efiBootImage)
         {
+            _efiBootImage = efiBootImage;
             SourceDirectory = sourceDirectory;
             VolumeSectors = volumeSectors;
             _root = root;
@@ -47,6 +51,14 @@ public static class Iso9660ImageWriter
             DirectoryCount = directories.Count;
             FileBytes = files.Sum(file => file.DataLength);
         }
+
+        public string? EfiBootImagePath => _efiBootImage?.SourcePath;
+
+        public uint? BootCatalogLba => _efiBootImage is null ? null : FirstMetadataLba + 1;
+
+        public uint? EfiBootImageLba => _efiBootImage?.DataLba;
+
+        public long EfiBootImageBytes => _efiBootImage?.DataLength ?? 0;
 
         public string SourceDirectory { get; }
 
@@ -72,7 +84,8 @@ public static class Iso9660ImageWriter
         uint volumeSectors,
         string volumeLabel,
         DateTimeOffset? timestamp = null,
-        bool filesAtOuterRing = false)
+        bool filesAtOuterRing = false,
+        string? efiBootImagePath = null)
     {
         if (volumeSectors <= FirstMetadataLba)
         {
@@ -88,12 +101,24 @@ public static class Iso9660ImageWriter
         if (sourceDirectory is not null && (File.GetAttributes(sourceFullPath) & FileAttributes.ReparsePoint) != 0)
             throw new IOException($"Reparse points are not supported in --data-dir: {sourceFullPath}");
 
+        IsoNode? efiBootImage = null;
+        if (efiBootImagePath is not null)
+        {
+            FileInfo source = new(Path.GetFullPath(efiBootImagePath));
+            EfiBootImage.Validate(source.FullName);
+            efiBootImage = new IsoNode(source.FullName, string.Empty, isDirectory: false, parent: null)
+            {
+                DataLength = source.Length,
+                Timestamp = source.LastWriteTimeUtc,
+            };
+        }
+
         IsoNode root = sourceDirectory is null
             ? new IsoNode(string.Empty, string.Empty, isDirectory: true, parent: null) { Timestamp = timestamp ?? DateTimeOffset.UtcNow }
             : ReadTree(sourceFullPath);
         List<IsoNode> directories = AssignDirectoryNumbers(root);
         AssignIdentifiers(directories);
-        Layout layout = BuildLayout(directories, volumeSectors, filesAtOuterRing);
+        Layout layout = BuildLayout(directories, volumeSectors, filesAtOuterRing, efiBootImage);
         return new LayoutPlan(
             sourceFullPath,
             volumeSectors,
@@ -102,7 +127,8 @@ public static class Iso9660ImageWriter
             layout,
             NormalizePrimaryIdentifier(volumeLabel, 32, "DVD_IMAGE"),
             NormalizeJolietIdentifier(volumeLabel, 16, "DVD_IMAGE"),
-            timestamp ?? DateTimeOffset.UtcNow);
+            timestamp ?? DateTimeOffset.UtcNow,
+            efiBootImage);
     }
 
     public static void WriteSequentialPrefix(
@@ -125,12 +151,7 @@ public static class Iso9660ImageWriter
                 $"Sequential prefix must end between LBA {plan.DataEndLbaExclusive} and {plan.VolumeSectors}.");
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
-        foreach (IsoNode file in EnumerateFiles(plan._root))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            ValidateSourceFile(file);
-        }
+        ValidateSources(plan, cancellationToken);
         SequentialIsoWriter writer = new(output, cancellationToken);
         WriteFilesystem(plan, writer);
         writer.PadToLba(endLbaExclusive);
@@ -176,6 +197,7 @@ public static class Iso9660ImageWriter
     private static void ValidateSources(LayoutPlan plan, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (plan._efiBootImage is not null) ValidateSourceFile(plan._efiBootImage);
         foreach (IsoNode file in EnumerateFiles(plan._root))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -196,7 +218,10 @@ public static class Iso9660ImageWriter
             plan._root.PrimaryDirectoryBytes,
             joliet: false,
             plan._timestamp));
-        output.WriteAtLba(SupplementaryVolumeDescriptorLba, BuildVolumeDescriptor(
+        bool bootable = plan._efiBootImage is not null;
+        if (bootable)
+            output.WriteAtLba(BootRecordVolumeDescriptorLba, BuildBootRecord(plan));
+        output.WriteAtLba(bootable ? SupplementaryVolumeDescriptorLba + 1 : SupplementaryVolumeDescriptorLba, BuildVolumeDescriptor(
             type: 2,
             plan.VolumeSectors,
             plan._jolietVolumeLabel,
@@ -207,7 +232,9 @@ public static class Iso9660ImageWriter
             plan._root.JolietDirectoryBytes,
             joliet: true,
             plan._timestamp));
-        output.WriteAtLba(TerminatorLba, BuildTerminator());
+        output.WriteAtLba(bootable ? TerminatorLba + 1 : TerminatorLba, BuildTerminator());
+        if (bootable)
+            output.WriteAtLba(plan.BootCatalogLba!.Value, BuildBootCatalog(plan));
         output.WriteAtLba(
             plan._layout.PrimaryLittlePathTableLba,
             BuildPathTable(plan._directories, littleEndian: true, joliet: false));
@@ -235,6 +262,40 @@ public static class Iso9660ImageWriter
                 BuildDirectoryExtent(directory, joliet: true));
         }
 
+        // Keep the FAT image in the prefix even when ordinary files occupy the outer ring.
+        if (plan._efiBootImage is not null) output.WriteFileAtLba(plan._efiBootImage);
+    }
+
+    private static byte[] BuildBootRecord(LayoutPlan plan)
+    {
+        byte[] record = new byte[LogicalSectorBytes];
+        WriteAscii(record, 1, "CD001");
+        record[6] = 1;
+        WriteAscii(record, 7, "EL TORITO SPECIFICATION");
+        BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(71, 4), plan.BootCatalogLba!.Value);
+        return record;
+    }
+
+    private static byte[] BuildBootCatalog(LayoutPlan plan)
+    {
+        byte[] catalog = new byte[LogicalSectorBytes];
+        catalog[0] = 1; // Validation entry.
+        catalog[1] = 0xEF; // EFI platform, including the initial/default entry.
+        WriteAscii(catalog, 4, "Disc Image Studio");
+        catalog[30] = 0x55;
+        catalog[31] = 0xAA;
+        int sum = 0;
+        for (int offset = 0; offset < 32; offset += 2)
+            sum += BinaryPrimitives.ReadUInt16LittleEndian(catalog.AsSpan(offset, 2));
+        BinaryPrimitives.WriteUInt16LittleEndian(catalog.AsSpan(28, 2), unchecked((ushort)-sum));
+        catalog[32] = 0x88; // Bootable, no emulation; segment and system type stay zero.
+        long sectors = plan.EfiBootImageBytes / 512;
+        // UEFI 2.10 §13.3.2: zero means the remaining media; FAT's BPB supplies
+        // the filesystem size when the image exceeds the 16-bit sector count.
+        BinaryPrimitives.WriteUInt16LittleEndian(catalog.AsSpan(38, 2),
+            sectors <= ushort.MaxValue ? (ushort)sectors : (ushort)0);
+        BinaryPrimitives.WriteUInt32LittleEndian(catalog.AsSpan(40, 4), plan.EfiBootImageLba!.Value);
+        return catalog;
     }
 
     private static void WriteFiles(LayoutPlan plan, SequentialIsoWriter output)
@@ -359,11 +420,11 @@ public static class Iso9660ImageWriter
         }
     }
 
-    private static Layout BuildLayout(List<IsoNode> directories, uint volumeSectors, bool filesAtOuterRing)
+    private static Layout BuildLayout(List<IsoNode> directories, uint volumeSectors, bool filesAtOuterRing, IsoNode? efiBootImage)
     {
         int primaryPathTableBytes = PathTableLength(directories, joliet: false);
         int jolietPathTableBytes = PathTableLength(directories, joliet: true);
-        uint cursor = FirstMetadataLba;
+        uint cursor = efiBootImage is null ? FirstMetadataLba : FirstMetadataLba + 2;
         uint primaryLittlePathTableLba = Allocate(ref cursor, primaryPathTableBytes);
         uint primaryBigPathTableLba = Allocate(ref cursor, primaryPathTableBytes);
         uint jolietLittlePathTableLba = Allocate(ref cursor, jolietPathTableBytes);
@@ -381,6 +442,8 @@ public static class Iso9660ImageWriter
             directory.JolietDirectoryLba = Allocate(ref cursor, directory.JolietDirectoryBytes);
         }
 
+        if (efiBootImage is not null)
+            efiBootImage.DataLba = Allocate(ref cursor, efiBootImage.DataLength);
         uint metadataEnd = cursor;
         List<IsoNode> files = EnumerateFiles(directories[0]).ToList();
         ulong fileSectors = 0;

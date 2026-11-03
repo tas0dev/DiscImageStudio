@@ -19,6 +19,10 @@ The Windows desktop app designs and burns disc images. The **experimental Linux 
 
 ---
 
+### UEFI boot
+
+CD/DVD ISOs support optional UEFI El Torito boot. Use `--efi-boot-image efi.img` in the CLI or select a FAT EFI image on the Export page. Generation reserves the boot and filesystem extents and draws artwork in the remaining recording area.
+
 ## Results
 
 ![](docs/images/case1.jpg)

@@ -1240,5 +1240,29 @@
     "en": "{0} layers",
     "zh-TW": "{0} 層",
     "ja": "{0} レイヤー"
+  },
+  "Xaml.EfiBootImage": {
+    "zh-CN": "UEFI 引导映像（可选）",
+    "zh-TW": "UEFI 開機映像（選用）",
+    "en": "UEFI boot image (optional)",
+    "ja": "UEFIブートイメージ（任意）"
+  },
+  "Xaml.EfiBootImageFilter": {
+    "zh-CN": "FAT EFI 映像|*.img;*.ima;*.fat|所有文件|*.*",
+    "zh-TW": "FAT EFI 映像|*.img;*.ima;*.fat|所有檔案|*.*",
+    "en": "FAT EFI images|*.img;*.ima;*.fat|All files|*.*",
+    "ja": "FAT EFIイメージ|*.img;*.ima;*.fat|すべてのファイル|*.*"
+  },
+  "Xaml.EfiBootImageHint": {
+    "zh-CN": "选择包含 EFI/BOOT 引导程序的 FAT 卷映像。留空禁用 UEFI 引导。",
+    "zh-TW": "選擇包含 EFI/BOOT 開機程式的 FAT 磁碟區映像。留空停用 UEFI 開機。",
+    "en": "Select a FAT volume image containing an EFI/BOOT loader. Leave empty to disable UEFI boot.",
+    "ja": "EFI/BOOTローダーを含むFATボリュームイメージを指定します。空欄でUEFIブートを無効にします。"
+  },
+  "Xaml.DisableUefiBoot": {
+    "zh-CN": "禁用 UEFI 引导",
+    "zh-TW": "停用 UEFI 開機",
+    "en": "Disable UEFI boot",
+    "ja": "UEFIブートを無効化"
   }
 }

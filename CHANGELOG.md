@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 中文
+
+- CD/DVD 可选 UEFI El Torito 引导：CLI `--efi-boot-image` 或导出页选择外部 FAT EFI 映像，设置随工程保存，并与预览及流式刻录共用布局。完整引导映像与目录、文件和绘图区隔离；不指定时保留原有行为。
+- 新增可跨平台运行的 El Torito/FAT/布局回归测试，以及 OVMF + QEMU 光盘引导验证工具。
+
+### English
+
+- Added optional UEFI El Torito boot for CD/DVD images. Select an external FAT EFI image with CLI `--efi-boot-image` or the Export page; projects retain the setting and share the layout with previews and streaming burns. The complete boot image stays outside filesystem and drawing extents. Existing behavior is retained when omitted.
+- Added portable El Torito/FAT/layout regression tests and an OVMF + QEMU optical boot probe.
+
 ## [1.3.6] - 2026-11-02
 
 ### 中文

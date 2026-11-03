@@ -14,6 +14,7 @@ internal static class ProjectSession
     {
         ProjectGeometry geometry = document.Geometry;
         ProjectOutputs outputs = document.Outputs;
+        state.EfiBootImagePath = outputs.EfiBootImagePath ?? string.Empty;
         string inner = Format(geometry.InnerRadiusMm);
         string outer = Format(geometry.OuterRadiusMm);
         string sectors = geometry.Sectors.ToString(CultureInfo.InvariantCulture);
@@ -121,7 +122,8 @@ internal static class ProjectSession
                     state.DvdDataDirectory,
                     state.DvdVolumeLabel,
                     Interleave: false,
-                    FilesAtOuterRing: state.DvdFilesAtOuterRing);
+                    FilesAtOuterRing: state.DvdFilesAtOuterRing,
+                    EfiBootImagePath: string.IsNullOrWhiteSpace(state.EfiBootImagePath) ? null : state.EfiBootImagePath.Trim());
             case OpticalDiscFamily.BluRay:
                 return new ProjectOutputs(
                     RequireOutput(state.BdOutputPath, L.T("蓝光 ISO 输出位置")),
@@ -137,7 +139,8 @@ internal static class ProjectSession
                     state.CdDataDirectory,
                     state.CdVolumeLabel,
                     state.CdInterleave,
-                    FilesAtOuterRing: state.CdFilesAtOuterRing);
+                    FilesAtOuterRing: state.CdFilesAtOuterRing,
+                    EfiBootImagePath: string.IsNullOrWhiteSpace(state.EfiBootImagePath) ? null : state.EfiBootImagePath.Trim());
         }
     }
 

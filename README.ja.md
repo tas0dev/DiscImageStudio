@@ -19,6 +19,10 @@ Windows デスクトップ版では、光ディスクの記録面に描く画像
 
 ---
 
+### UEFIブート
+
+CD/DVD ISOのUEFI El Toritoブートに対応しています。CLIで `--efi-boot-image efi.img` を指定するか、エクスポート画面でFAT形式のEFIイメージを選択します。ブート領域とファイルシステムを保護し、残りの記録面に画像を描画します。
+
 ## 作例
 
 ![](docs/images/case1.jpg)

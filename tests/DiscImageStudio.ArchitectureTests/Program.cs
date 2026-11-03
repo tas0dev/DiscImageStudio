@@ -69,6 +69,7 @@ ProjectDialogPresetTests.Run();
 ProjectStoreTests.Run();
 ProjectSessionTests.Run();
 FilePlacementProjectTests.Run();
+EfiBootProjectTests.Run();
 FilePlacementPreviewTests.Run();
 DesignComposerTests.Run();
 CdAudioCompatibilityTests.Run();

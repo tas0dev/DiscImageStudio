@@ -701,13 +701,14 @@ public partial class LivePreviewViewModel : ObservableObject
         try
         {
             string dataDirectory = _state.CdDataDirectory.Trim();
+            string? efiBootImage = string.IsNullOrWhiteSpace(_state.EfiBootImagePath) ? null : _state.EfiBootImagePath.Trim();
             string volumeLabel = _state.CdVolumeLabel.Trim();
             bool filesAtOuterRing = _state.CdFilesAtOuterRing;
             CdDataLayoutPlan? plan = await StaWorker.RunAsync(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                CdDataLayoutPlan? layout = dataDirectory.Length > 0
-                    ? CdDataImageGenerator.PrepareLayout(dataDirectory, generated, volumeLabel, filesAtOuterRing)
+                CdDataLayoutPlan? layout = dataDirectory.Length > 0 || efiBootImage is not null
+                    ? CdDataImageGenerator.PrepareLayout(dataDirectory.Length > 0 ? dataDirectory : null, generated, volumeLabel, filesAtOuterRing, efiBootImage)
                     : null;
                 cancellationToken.ThrowIfCancellationRequested();
                 if (layout is not null)
@@ -1435,12 +1436,13 @@ public partial class LivePreviewViewModel : ObservableObject
             uint drawingStart = 0;
             uint drawingSectors = checked((uint)totalSectorsValue);
             string dataDirectory = _state.DvdDataDirectory.Trim();
-            if (dataDirectory.Length > 0)
+            if (_state.HasDvdFiles)
             {
                 DvdStreamingOptions generated = ReadDvdPreviewGeometry(calibration: false);
-                filePlan = DvdStreamingGenerator.PrepareHybrid(dataDirectory, generated,
+                filePlan = DvdStreamingGenerator.PrepareHybrid(dataDirectory.Length > 0 ? dataDirectory : null, generated,
                     string.IsNullOrWhiteSpace(_state.DvdVolumeLabel) ? "DISC_IMAGE" : _state.DvdVolumeLabel.Trim(),
-                    filesAtOuterRing: _state.DvdFilesAtOuterRing);
+                    filesAtOuterRing: _state.DvdFilesAtOuterRing,
+                    efiBootImagePath: string.IsNullOrWhiteSpace(_state.EfiBootImagePath) ? null : _state.EfiBootImagePath.Trim());
                 drawingStart = filePlan.DrawingStartLba;
                 drawingSectors = filePlan.DrawingSectors;
             }

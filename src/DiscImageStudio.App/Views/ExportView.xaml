@@ -95,6 +95,17 @@
                         </StackPanel>
                     </controls:VisibilityGate>
 
+                    <controls:VisibilityGate IsOpen="{Binding SupportsUefiBoot}" Margin="0,14,0,0">
+                        <StackPanel>
+                            <controls:PathField Label="{loc:Text Xaml.EfiBootImage}"
+                                                Text="{Binding State.EfiBootImagePath}"
+                                                ButtonLabel="{loc:Text Xaml.Select}"
+                                                Hint="{loc:Text Xaml.EfiBootImageHint}"
+                                                Command="{Binding BrowseEfiBootImageCommand}" />
+                            <Button Style="{StaticResource CompactButton}" HorizontalAlignment="Left" Margin="0,6,0,0"
+                                    Content="{loc:Text Xaml.DisableUefiBoot}" Command="{Binding ClearEfiBootImageCommand}" />
+                        </StackPanel>
+                    </controls:VisibilityGate>
                     <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                         <Button Style="{StaticResource PrimaryButton}" Content="{Binding GenerateButtonText}"
                                 Command="{Binding GenerateCommand}" />

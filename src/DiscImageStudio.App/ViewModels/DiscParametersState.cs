@@ -77,6 +77,10 @@ public partial class DiscParametersState : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasCdFiles), nameof(IsCdAudioMode), nameof(IsCdWaveOutput),
         nameof(CdOutputLabel), nameof(CdOutputHint))]
     private string _cdDataDirectory = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCdFiles), nameof(HasDvdFiles), nameof(IsCdAudioMode), nameof(IsCdWaveOutput),
+        nameof(CdOutputLabel), nameof(CdOutputHint))]
+    private string _efiBootImagePath = string.Empty;
     [ObservableProperty] private bool _cdFilesAtOuterRing;
     [ObservableProperty] private string _cdVolumeLabel = "CD_IMAGE";
 
@@ -195,7 +199,7 @@ public partial class DiscParametersState : ObservableObject
     public bool IsCdWaveOutput => IsCdAudioMode && Path.GetExtension(CdOutputPath.Trim())
         .Equals(".wav", StringComparison.OrdinalIgnoreCase);
 
-    public bool HasCdFiles => !string.IsNullOrWhiteSpace(CdDataDirectory);
+    public bool HasCdFiles => !string.IsNullOrWhiteSpace(CdDataDirectory) || !string.IsNullOrWhiteSpace(EfiBootImagePath);
 
     public bool IsCdAudioMode => !HasCdFiles;
 
@@ -206,6 +210,8 @@ public partial class DiscParametersState : ObservableObject
     public string CdOutputHint => HasCdFiles
         ? L.T("包含随盘文件，导出为 CD 数据盘 ISO。")
         : L.T("无随盘文件时生成音轨，推荐 WAV 格式。");
+
+    partial void OnEfiBootImagePathChanged(string value) => NormalizeCdOutputFormat();
 
     partial void OnCdDataDirectoryChanged(string value) => NormalizeCdOutputFormat();
 
@@ -225,7 +231,7 @@ public partial class DiscParametersState : ObservableObject
         }
     }
 
-    public bool HasDvdFiles => !string.IsNullOrWhiteSpace(DvdDataDirectory);
+    public bool HasDvdFiles => !string.IsNullOrWhiteSpace(DvdDataDirectory) || !string.IsNullOrWhiteSpace(EfiBootImagePath);
 
     public bool HasBluRayFiles => !string.IsNullOrWhiteSpace(BdDataDirectory);
 

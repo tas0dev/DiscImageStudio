@@ -10,6 +10,7 @@
   <Project Path="src/DiscImageStudio.BluRay/DiscImageStudio.BluRay.csproj" />
   <Project Path="src/DiscImageStudio.App/DiscImageStudio.App.csproj" />
   <Project Path="src/DvdImageSolver/DvdImageSolver.csproj" />
+  <Project Path="tests/DiscImageStudio.BootTests/DiscImageStudio.BootTests.csproj" />
   <Project Path="tests/DiscImageStudio.ArchitectureTests/DiscImageStudio.ArchitectureTests.csproj" />
   <Project Path="tools/FourLevelDither/FourLevelDither.csproj" />
   <Project Path="tools/DvdGrayProbe/DvdGrayProbe.csproj" />

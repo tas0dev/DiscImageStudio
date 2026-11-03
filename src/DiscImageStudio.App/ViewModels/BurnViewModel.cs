@@ -106,7 +106,7 @@ public partial class BurnViewModel : ObservableObject
         };
         _state.PropertyChanged += (_, args) =>
         {
-            if (args.PropertyName == nameof(DiscParametersState.CdDataDirectory)
+            if ((args.PropertyName is nameof(DiscParametersState.CdDataDirectory) or nameof(DiscParametersState.EfiBootImagePath))
                 && !UseCalibrationPattern
                 && _shell.CurrentProject?.Family == OpticalDiscFamily.CompactDisc)
             {
@@ -165,7 +165,7 @@ public partial class BurnViewModel : ObservableObject
         ? OpticalBurnMediaKind.BluRayData
         : IsDvdBurn
             ? OpticalBurnMediaKind.DvdData
-            : !UseCalibrationPattern && !string.IsNullOrWhiteSpace(_state.CdDataDirectory)
+            : !UseCalibrationPattern && _state.HasCdFiles
                 ? OpticalBurnMediaKind.CdData : OpticalBurnMediaKind.CdAudio;
 
     /// <summary>Device→speeds→confirm gating: not busy, device chosen, checkbox ticked.</summary>
@@ -258,7 +258,7 @@ public partial class BurnViewModel : ObservableObject
             identity = string.Join("\u001f", "dvd", _design.CompositeRevision, _state.DvdTotalSectors,
                 _state.DvdInnerRadius, _state.DvdOuterRadius,
                 _state.DvdPitchLinear, _state.DvdPitchQuadratic, _state.DvdPitchCubic,
-                _state.DvdDataDirectory, _state.DvdVolumeLabel, _state.DvdFilesAtOuterRing,
+                _state.DvdDataDirectory, _state.DvdVolumeLabel, _state.DvdFilesAtOuterRing, _state.EfiBootImagePath,
                 _state.ToneDitherStrength, _state.ToneBrightness, _state.ToneSrgbLinearization);
         }
         else if (IsBluRayBurn)
@@ -285,7 +285,7 @@ public partial class BurnViewModel : ObservableObject
                 : L.T("请先在设计页导入图片");
             // The encoding is part of the material actually written, and the burn page has
             // no switch of its own: surfacing it here keeps the streamed bytes explainable.
-            string encoding = string.IsNullOrWhiteSpace(_state.CdDataDirectory)
+            string encoding = !_state.HasCdFiles
                 ? _state.CdInterleave ? L.T("CD 音轨 · 启用延迟交织") : L.T("CD 音轨 · 未交织")
                 : L.F($"CD 数据盘 · 文件位于{(_state.CdFilesAtOuterRing ? L.T("外圈") : L.T("内圈"))}");
             SourceDetails = _design.HasLayers
@@ -293,7 +293,7 @@ public partial class BurnViewModel : ObservableObject
                 : L.F($"合成图会自动生成本页输入。 · {encoding}");
             identity = string.Join("\u001f", "cd", _design.CompositeRevision, _state.CdSectors,
                 _state.CdInnerRadius, _state.CdOuterRadius, _state.CdInterleave,
-                _state.CdDataDirectory, _state.CdVolumeLabel, _state.CdFilesAtOuterRing,
+                _state.CdDataDirectory, _state.CdVolumeLabel, _state.CdFilesAtOuterRing, _state.EfiBootImagePath,
                 _state.ToneDitherStrength, _state.ToneLevels, _state.ToneBrightness,
                 _state.ToneSrgbLinearization);
         }
@@ -514,15 +514,16 @@ public partial class BurnViewModel : ObservableObject
                 {
                     DvdStreamingOptions options = ReadDvdStreamingOptions();
                     string dataDirectory = _state.DvdDataDirectory.Trim();
-                    DvdHybridStreamingPlan? hybridPlan = dataDirectory.Length == 0
+                    DvdHybridStreamingPlan? hybridPlan = !_state.HasDvdFiles
                         ? null
                         : DvdStreamingGenerator.PrepareHybrid(
-                            dataDirectory,
+                            dataDirectory.Length > 0 ? dataDirectory : null,
                             options,
                             string.IsNullOrWhiteSpace(_state.DvdVolumeLabel)
                                 ? "DISC_IMAGE"
                                 : _state.DvdVolumeLabel.Trim(),
-                            filesAtOuterRing: _state.DvdFilesAtOuterRing);
+                            filesAtOuterRing: _state.DvdFilesAtOuterRing,
+                            efiBootImagePath: string.IsNullOrWhiteSpace(_state.EfiBootImagePath) ? null : _state.EfiBootImagePath.Trim());
                     request = new OpticalBurnRequest(
                         device.Id,
                         OpticalBurnMediaKind.DvdData,
@@ -566,7 +567,8 @@ public partial class BurnViewModel : ObservableObject
                         _state.CdInterleave,
                         _state.Tone,
                         device.Id,
-                        selectedWriteSpeed.Speed);
+                        selectedWriteSpeed.Speed,
+                        string.IsNullOrWhiteSpace(_state.EfiBootImagePath) ? null : _state.EfiBootImagePath.Trim());
                     contentDescription = request.MediaKind == OpticalBurnMediaKind.CdData
                         ? L.F($"CD 数据盘（DAO） · 文件位于{(_state.CdFilesAtOuterRing ? L.T("外圈") : L.T("内圈"))}")
                         : L.T("CD 音轨");
@@ -675,11 +677,12 @@ public partial class BurnViewModel : ObservableObject
         bool interleave,
         ToneProfile tone,
         string deviceId,
-        OpticalWriteSpeed? writeSpeed)
+        OpticalWriteSpeed? writeSpeed,
+        string? efiBootImagePath = null)
     {
         parameters.Validate();
         ToneProfile capturedTone = tone.Normalized();
-        if (string.IsNullOrWhiteSpace(dataDirectory))
+        if (string.IsNullOrWhiteSpace(dataDirectory) && efiBootImagePath is null)
         {
             return new OpticalBurnRequest(deviceId, OpticalBurnMediaKind.CdAudio, parameters.TotalBytes,
                 (output, token) => CdTrackGenerator.GenerateToStream(imagePath, output, parameters,
@@ -687,8 +690,8 @@ public partial class BurnViewModel : ObservableObject
                     tone: capturedTone), writeSpeed);
         }
 
-        CdDataLayoutPlan plan = CdDataImageGenerator.PrepareLayout(dataDirectory.Trim(), parameters,
-            string.IsNullOrWhiteSpace(volumeLabel) ? "CD_IMAGE" : volumeLabel.Trim(), filesAtOuterRing);
+        CdDataLayoutPlan plan = CdDataImageGenerator.PrepareLayout(string.IsNullOrWhiteSpace(dataDirectory) ? null : dataDirectory.Trim(), parameters,
+            string.IsNullOrWhiteSpace(volumeLabel) ? "CD_IMAGE" : volumeLabel.Trim(), filesAtOuterRing, efiBootImagePath);
         return new OpticalBurnRequest(deviceId, OpticalBurnMediaKind.CdData, checked(parameters.Sectors * 2048),
             (output, token) => CdDataImageGenerator.GenerateToStream(imagePath, output, parameters, plan,
                 cancellationToken: token, tone: capturedTone), writeSpeed);

@@ -27,6 +27,12 @@ public partial class ExportViewModel : ObservableObject
         _state = state;
         _design = design;
         BrowseOutputCommand = new RelayCommand(BrowseOutput, () => !_shell.IsBusy);
+        BrowseEfiBootImageCommand = new RelayCommand(() =>
+        {
+            string? path = _shell.Dialogs?.PickOpen(L.T("Xaml.EfiBootImage"), L.T("Xaml.EfiBootImageFilter"));
+            if (path is not null) _state.EfiBootImagePath = path;
+        }, () => !_shell.IsBusy);
+        ClearEfiBootImageCommand = new RelayCommand(() => _state.EfiBootImagePath = string.Empty, () => !_shell.IsBusy);
         BrowseDataCommand = new RelayCommand(BrowseData, () => !_shell.IsBusy);
         GenerateCommand = new AsyncRelayCommand(GenerateAsync, () => !_shell.IsBusy);
         _shell.BusyChanged += NotifyCommands;
@@ -38,6 +44,7 @@ public partial class ExportViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsCd));
                 OnPropertyChanged(nameof(IsDvd));
                 OnPropertyChanged(nameof(IsBluRay));
+                OnPropertyChanged(nameof(SupportsUefiBoot));
                 OnPropertyChanged(nameof(FamilyLabel));
                 OnPropertyChanged(nameof(GenerateButtonText));
                 UpdateSourceSummary();
@@ -47,7 +54,7 @@ public partial class ExportViewModel : ObservableObject
         _design.CanvasChanged += UpdateSourceSummary;
         _state.PropertyChanged += (_, args) =>
         {
-            if (args.PropertyName == nameof(DiscParametersState.CdDataDirectory))
+            if (args.PropertyName is nameof(DiscParametersState.CdDataDirectory) or nameof(DiscParametersState.EfiBootImagePath))
             {
                 OnPropertyChanged(nameof(GenerateButtonText));
             }
@@ -57,6 +64,8 @@ public partial class ExportViewModel : ObservableObject
     public bool IsCd => _shell.CurrentProject?.IsCd ?? true;
 
     public bool IsDvd => _shell.CurrentProject?.IsDvd ?? false;
+
+    public bool SupportsUefiBoot => !IsBluRay;
 
     public bool IsBluRay => _shell.CurrentProject?.IsBluRay ?? false;
 
@@ -81,6 +90,10 @@ public partial class ExportViewModel : ObservableObject
 
     public RelayCommand BrowseDataCommand { get; }
 
+    public RelayCommand BrowseEfiBootImageCommand { get; }
+
+    public RelayCommand ClearEfiBootImageCommand { get; }
+
     public IAsyncRelayCommand GenerateCommand { get; }
 
     [ObservableProperty]
@@ -90,6 +103,8 @@ public partial class ExportViewModel : ObservableObject
     {
         BrowseOutputCommand.NotifyCanExecuteChanged();
         BrowseDataCommand.NotifyCanExecuteChanged();
+        BrowseEfiBootImageCommand.NotifyCanExecuteChanged();
+        ClearEfiBootImageCommand.NotifyCanExecuteChanged();
         GenerateCommand.NotifyCanExecuteChanged();
     }
 
@@ -127,6 +142,12 @@ public partial class ExportViewModel : ObservableObject
                 _state.CdOutputPath = wav;
             }
         }
+    }
+
+    private void AddEfiBootArguments(List<string> arguments)
+    {
+        if (!string.IsNullOrWhiteSpace(_state.EfiBootImagePath))
+            arguments.AddRange(["--efi-boot-image", _state.EfiBootImagePath.Trim()]);
     }
 
     private void BrowseData()
@@ -219,11 +240,13 @@ public partial class ExportViewModel : ObservableObject
             "--tone-brightness", tone.Brightness.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
             "--tone-gamma", tone.SrgbLinearization.ToString().ToLowerInvariant(),
         ]);
+        AddEfiBootArguments(arguments);
         if (_state.HasCdFiles)
         {
+            if (!string.IsNullOrWhiteSpace(_state.CdDataDirectory))
+                arguments.AddRange(["--data-dir", _state.CdDataDirectory.Trim()]);
             arguments.AddRange(
             [
-                "--data-dir", _state.CdDataDirectory.Trim(),
                 "--volume-label", string.IsNullOrWhiteSpace(_state.CdVolumeLabel) ? "CD_IMAGE" : _state.CdVolumeLabel.Trim(),
                 "--file-position", _state.CdFilesAtOuterRing ? "outer" : "inner",
             ]);
@@ -271,15 +294,16 @@ public partial class ExportViewModel : ObservableObject
             "--fast-output", "true",
             "--volume-label", string.IsNullOrWhiteSpace(_state.DvdVolumeLabel) ? "DISC_IMAGE" : _state.DvdVolumeLabel.Trim(),
         ];
-        if (string.IsNullOrWhiteSpace(_state.DvdDataDirectory))
+        AddEfiBootArguments(arguments);
+        if (!_state.HasDvdFiles)
         {
             arguments.Add("--fill-sectors");
             arguments.Add(_state.DvdTotalSectors.Trim());
         }
         else
         {
-            arguments.Add("--data-dir");
-            arguments.Add(_state.DvdDataDirectory.Trim());
+            if (!string.IsNullOrWhiteSpace(_state.DvdDataDirectory))
+                arguments.AddRange(["--data-dir", _state.DvdDataDirectory.Trim()]);
             arguments.Add("--file-position");
             arguments.Add(_state.DvdFilesAtOuterRing ? "outer" : "inner");
         }

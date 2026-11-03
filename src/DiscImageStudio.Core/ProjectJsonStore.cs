@@ -35,7 +35,8 @@ public sealed record ProjectOutputs(
     string DataDirectory,
     string VolumeLabel,
     bool Interleave,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool FilesAtOuterRing = false);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool FilesAtOuterRing = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? EfiBootImagePath = null);
 
 /// <summary>Generation settings that exist only for BD-R: the 3T/6T mapping polarity.
 /// This is deliberately separate from <see cref="ToneProfile"/>: polarity selects which
@@ -380,6 +381,8 @@ public static class ProjectJsonStore
     private static void ValidateOutputs(ProjectDocument document)
     {
         ProjectOutputs outputs = document.Outputs;
+        if (document.IsBluRay && !string.IsNullOrWhiteSpace(outputs.EfiBootImagePath))
+            throw new InvalidDataException("UEFI boot images are supported only for CD/DVD projects.");
         if (string.IsNullOrWhiteSpace(outputs.OutputPath))
         {
             throw new InvalidDataException("outputs.outputPath 不能为空。");

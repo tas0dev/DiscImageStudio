@@ -19,6 +19,10 @@ Windows 桌面版支援設計與燒錄，Linux 和 macOS 的**實驗性命令列
 
 ---
 
+### UEFI 開機
+
+CD/DVD ISO 支援選用的 UEFI El Torito 開機。CLI 使用 `--efi-boot-image efi.img`，或在匯出頁選擇 FAT EFI 映像；產生時會保留開機映像與檔案系統區域，並在其餘記錄面繪製圖案。
+
 ## 效果預覽
 
 ![](docs/images/case1.jpg)

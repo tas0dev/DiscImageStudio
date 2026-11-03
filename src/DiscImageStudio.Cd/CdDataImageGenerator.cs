@@ -19,6 +19,7 @@ public sealed class CdDataLayoutPlan
     public long TotalSectors => IsoLayout.VolumeSectors;
     public long ContentLength => TotalSectors * CdDataImageGenerator.BytesPerSector;
     public string SourceDirectory => IsoLayout.SourceDirectory;
+    public string? EfiBootImagePath => IsoLayout.EfiBootImagePath;
     public uint DrawingStartLba { get; }
     public uint DrawingEndLbaExclusive { get; }
     public uint DrawingSectors => DrawingEndLbaExclusive - DrawingStartLba;
@@ -40,13 +41,13 @@ public static class CdDataImageGenerator
     private static readonly byte[] ScrambleMask = BuildScrambleMask();
     private static readonly int[] PhysicalOffsets = BuildPhysicalOffsets();
 
-    public static CdDataLayoutPlan PrepareLayout(string dataDirectory, CdDiscParameters parameters,
-        string volumeLabel = "CD_IMAGE", bool filesAtOuterRing = false)
+    public static CdDataLayoutPlan PrepareLayout(string? dataDirectory, CdDiscParameters parameters,
+        string volumeLabel = "CD_IMAGE", bool filesAtOuterRing = false, string? efiBootImagePath = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
+        if (efiBootImagePath is null) ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
         parameters.Validate();
         CdDataLayoutPlan plan = new(Iso9660ImageWriter.Plan(dataDirectory,
-            checked((uint)parameters.Sectors), volumeLabel, filesAtOuterRing: filesAtOuterRing));
+            checked((uint)parameters.Sectors), volumeLabel, filesAtOuterRing: filesAtOuterRing, efiBootImagePath: efiBootImagePath));
         if (plan.DrawingStartLba >= plan.DrawingEndLbaExclusive)
             throw new ArgumentException("The filesystem leaves no CD sectors for drawing.", nameof(dataDirectory));
         return plan;
@@ -63,8 +64,8 @@ public static class CdDataImageGenerator
         if (!Path.GetExtension(target).Equals(".iso", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("CD data output must be a Mode 1 .iso image.", nameof(outputPath));
         if (target.Equals(source, StringComparison.OrdinalIgnoreCase)
-            || target.StartsWith(Path.TrimEndingDirectorySeparator(plan.SourceDirectory)
-                + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            || target.Equals(plan.EfiBootImagePath, StringComparison.OrdinalIgnoreCase)
+            || (plan.SourceDirectory.Length > 0 && Iso9660ImageWriter.IsWithinDirectory(target, plan.SourceDirectory)))
             throw new ArgumentException("The output must be outside the source data folder and must not overwrite the source image.", nameof(outputPath));
         RasterImage image = RasterImage.Load(source);
         ToneProfile effectiveTone = (tone ?? ToneProfile.LegacyBinary).Normalized();

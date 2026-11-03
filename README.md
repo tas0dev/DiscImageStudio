@@ -19,6 +19,10 @@ Windows 桌面版支持设计与刻录，Linux 和 macOS 的**实验性命令行
 
 ---
 
+### UEFI 引导
+
+CD/DVD ISO 支持可选的 UEFI El Torito 引导。CLI 使用 `--efi-boot-image efi.img`，或在导出页选择 FAT EFI 映像；生成时自动避开引导映像和文件系统区域，保留剩余记录面的图案绘制。
+
 ## 效果预览
 
 ![](docs/images/case1.jpg)

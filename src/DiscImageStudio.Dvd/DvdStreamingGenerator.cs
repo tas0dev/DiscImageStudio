@@ -143,19 +143,21 @@ public static class DvdStreamingGenerator
     private const uint PsnOffset = 0x30000;
 
     public static DvdHybridStreamingPlan PrepareHybrid(
-        string dataDirectory,
+        string? dataDirectory,
         DvdStreamingOptions options,
         string volumeLabel = "DVD_IMAGE",
-        bool filesAtOuterRing = false)
+        bool filesAtOuterRing = false,
+        string? efiBootImagePath = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
+        if (efiBootImagePath is null) ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
         HybridIsoImageWriter.LayoutPlan isoLayout = HybridIsoImageWriter.Plan(
             dataDirectory,
             options.TotalSectors,
             volumeLabel,
-            filesAtOuterRing);
+            filesAtOuterRing,
+            efiBootImagePath);
         uint drawingStartLba = AlignToEccBlock(filesAtOuterRing
             ? isoLayout.MetadataEndLbaExclusive : isoLayout.DataEndLbaExclusive, PsnOffset);
         uint drawingEndLba = filesAtOuterRing ? isoLayout.FileDataStartLba / 16 * 16 : options.TotalSectors;

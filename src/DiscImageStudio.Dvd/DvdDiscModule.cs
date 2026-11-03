@@ -25,6 +25,7 @@ public sealed class DvdDiscModule : IOpticalDiscModule
                 [
                     new("image", "Source image", DiscOptionValueType.InputFile),
                     new("iso-output", "Output ISO", DiscOptionValueType.OutputFile),
+                    new("efi-boot-image", "FAT EFI boot image (optional)", DiscOptionValueType.InputFile),
                     new("data-dir", "Hybrid data folder", DiscOptionValueType.InputFolder),
                     new("file-position", "File placement", DiscOptionValueType.Choice, DefaultValue: "inner", Choices: ["inner", "outer"]),
                 ]),

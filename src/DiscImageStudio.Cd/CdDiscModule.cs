@@ -47,11 +47,12 @@ public sealed class CdDiscModule : IOpticalDiscModule
             new DiscCommandDescriptor(
                 "cd-generate",
                 "Generate CD audio or data image",
-                "Without files, writes WAV/CUE or RAW audio; with --data-dir, writes a Mode 1 ISO with inner/outer-ring files.",
+                "Without files or boot image, writes WAV/CUE or RAW audio; --data-dir or --efi-boot-image selects a Mode 1 ISO.",
                 DiscModuleCapabilities.RawTrackGeneration | DiscModuleCapabilities.DataImageGeneration | DiscModuleCapabilities.HybridFilesystem,
                 [
                     new("input", "Source image", DiscOptionValueType.InputFile, Required: true),
                     new("output", "Audio track (.wav/.raw) or data image (.iso)", DiscOptionValueType.OutputFile, Required: true),
+                    new("efi-boot-image", "FAT EFI boot image (optional)", DiscOptionValueType.InputFile),
                     new("data-dir", "Files to include; omitted for audio", DiscOptionValueType.InputFolder),
                     new("volume-label", "Data volume label", DiscOptionValueType.String, DefaultValue: "CD_IMAGE"),
                     new("file-position", "File position", DiscOptionValueType.Choice, DefaultValue: "inner", Choices: ["inner", "outer"]),
@@ -71,6 +72,7 @@ public sealed class CdDiscModule : IOpticalDiscModule
                     .. GeometryOptions,
                     .. MeasuredGeometryOptions,
                     .. ToneOptions,
+                    new("efi-boot-image", "FAT EFI boot image (optional)", DiscOptionValueType.InputFile),
                     new("data-dir", "Data files for drawing-range preview", DiscOptionValueType.InputFolder),
                     new("volume-label", "Data volume label", DiscOptionValueType.String, DefaultValue: "CD_IMAGE"),
                     new("file-position", "File position", DiscOptionValueType.Choice, DefaultValue: "inner", Choices: ["inner", "outer"]),
@@ -123,11 +125,12 @@ public sealed class CdDiscModule : IOpticalDiscModule
         string output = options.Require("output");
         string dataDirectory = options.GetString("data-dir", string.Empty).Trim();
         bool outer = ReadFilePosition(options);
-        if (dataDirectory.Length > 0)
+        string? efiBootImage = options.Has("efi-boot-image") ? options.Require("efi-boot-image") : null;
+        if (dataDirectory.Length > 0 || efiBootImage is not null)
         {
             CdDiscParameters parameters = ReadParameters(options);
-            CdDataLayoutPlan plan = CdDataImageGenerator.PrepareLayout(dataDirectory, parameters,
-                options.GetString("volume-label", "CD_IMAGE"), outer);
+            CdDataLayoutPlan plan = CdDataImageGenerator.PrepareLayout(dataDirectory.Length > 0 ? dataDirectory : null, parameters,
+                options.GetString("volume-label", "CD_IMAGE"), outer, efiBootImage);
             CdGenerationSummary dataSummary = CdDataImageGenerator.Generate(options.Require("input"),
                 output, parameters, plan,
                 value => progress?.Report(new DiscJobProgress(ModuleId, "generate",
@@ -172,10 +175,11 @@ public sealed class CdDiscModule : IOpticalDiscModule
         CdDiscParameters generated = ReadParameters(options);
         string dataDirectory = options.GetString("data-dir", string.Empty).Trim();
         bool outer = ReadFilePosition(options);
-        if (dataDirectory.Length > 0)
+        string? efiBootImage = options.Has("efi-boot-image") ? options.Require("efi-boot-image") : null;
+        if (dataDirectory.Length > 0 || efiBootImage is not null)
         {
-            CdDataLayoutPlan plan = CdDataImageGenerator.PrepareLayout(dataDirectory, generated,
-                options.GetString("volume-label", "CD_IMAGE"), outer);
+            CdDataLayoutPlan plan = CdDataImageGenerator.PrepareLayout(dataDirectory.Length > 0 ? dataDirectory : null, generated,
+                options.GetString("volume-label", "CD_IMAGE"), outer, efiBootImage);
             CdDataImageGenerator.PreviewWarp(options.Require("input"), output, generated,
                 ReadMeasuredParameters(options, generated), options.GetInt("size", 1600),
                 options.GetInt("samples-per-sector", 16), ReadTone(options), plan, cancellationToken);
@@ -319,6 +323,8 @@ public sealed class CdDiscModule : IOpticalDiscModule
 
             return new CdCommandOptions(values);
         }
+
+        internal bool Has(string key) => _values.ContainsKey(key);
 
         internal string Require(string key)
             => _values.TryGetValue(key, out string? value)

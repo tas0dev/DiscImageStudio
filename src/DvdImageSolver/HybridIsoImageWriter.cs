@@ -26,6 +26,7 @@ public static class HybridIsoImageWriter
         internal LayoutPlan(Iso9660ImageWriter.LayoutPlan layout) => Layout = layout;
         internal Iso9660ImageWriter.LayoutPlan Layout { get; }
         public string SourceDirectory => Layout.SourceDirectory;
+        public string? EfiBootImagePath => Layout.EfiBootImagePath;
         public uint VolumeSectors => Layout.VolumeSectors;
         public int FileCount => Layout.FileCount;
         public int DirectoryCount => Layout.DirectoryCount;
@@ -36,12 +37,12 @@ public static class HybridIsoImageWriter
         public bool FilesAtOuterRing => Layout.FilesAtOuterRing;
     }
 
-    public static LayoutPlan Plan(string sourceDirectory, uint volumeSectors, string volumeLabel,
-        bool filesAtOuterRing = false)
+    public static LayoutPlan Plan(string? sourceDirectory, uint volumeSectors, string volumeLabel,
+        bool filesAtOuterRing = false, string? efiBootImagePath = null)
     {
-        ArgumentNullException.ThrowIfNull(sourceDirectory);
+        if (efiBootImagePath is null) ArgumentNullException.ThrowIfNull(sourceDirectory);
         return new(Iso9660ImageWriter.Plan(sourceDirectory, volumeSectors, volumeLabel,
-            filesAtOuterRing: filesAtOuterRing));
+            filesAtOuterRing: filesAtOuterRing, efiBootImagePath: efiBootImagePath));
     }
 
     public static void WriteOuterRingPrefix(LayoutPlan plan, Stream output, uint endLbaExclusive,
@@ -68,7 +69,9 @@ public static class HybridIsoImageWriter
         string sourceFullPath = plan.SourceDirectory;
         uint volumeSectors = plan.VolumeSectors;
         string outputFullPath = Path.GetFullPath(outputPath);
-        if (Iso9660ImageWriter.IsWithinDirectory(outputFullPath, sourceFullPath))
+        if (outputFullPath.Equals(plan.EfiBootImagePath, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("--iso-output must not overwrite --efi-boot-image.");
+        if (sourceFullPath.Length > 0 && Iso9660ImageWriter.IsWithinDirectory(outputFullPath, sourceFullPath))
             throw new ArgumentException("--iso-output must be outside --data-dir so the generated image cannot include itself.");
         string outputDirectory = Path.GetDirectoryName(outputFullPath)
             ?? throw new ArgumentException("ISO output path has no parent directory.", nameof(outputPath));
